@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2D5BFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Photo Transfer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Photo Transfer</title>
+<style>
+:root{--bg:#EEF2F6;--card:#fff;--ink:#14202E;--mute:#5C6B7C;--line:#D5DDE6;--acc:#2D5BFF;--acc-ink:#fff;--ok:#1F9D6B;--err:#C23B3B}
+@media (prefers-color-scheme:dark){:root{--bg:#0E1622;--card:#17212F;--ink:#E8EEF5;--mute:#93A2B3;--line:#27364A;--acc:#6C8DFF;--acc-ink:#0E1622;--ok:#43C591;--err:#FF7A7A}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:17px/1.45 "Avenir Next","Segoe UI",system-ui,sans-serif}
+main{max-width:480px;margin:0 auto;padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom))}
+h1{font-size:28px;line-height:1.15;margin:8px 0 6px;letter-spacing:-.02em}
+h2{font-size:20px;margin:0 0 12px}
+p{margin:0 0 16px;color:var(--mute)}
+section[hidden]{display:none}
+button,.btn{display:block;width:100%;padding:16px;border:0;border-radius:14px;background:var(--acc);color:var(--acc-ink);font:inherit;font-weight:600;text-align:center;cursor:pointer;margin:0 0 12px}
+button.alt,.btn.alt{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 16px}
+.code{font-size:56px;font-weight:700;letter-spacing:.18em;text-align:center;margin:4px 0;font-variant-numeric:tabular-nums}
+input[type=text]{width:100%;padding:16px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;font-size:32px;text-align:center;letter-spacing:.3em;margin:0 0 12px}
+.status{font-size:15px;color:var(--mute);margin:0 0 12px;min-height:22px}
+.status.err{color:var(--err)}.status.ok{color:var(--ok)}
+.bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden;margin:8px 0 4px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .15s}
+ol{margin:0;padding:0;list-style:none;max-height:42vh;overflow:auto}
+li{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+li:last-child{border:0}
+li b{min-width:2.4em;color:var(--mute);font-variant-numeric:tabular-nums;font-weight:600}
+li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+li em{font-style:normal;color:var(--mute)}
+li.done em{color:var(--ok)}
+.back{background:none;color:var(--mute);width:auto;padding:8px 0;font-weight:500;margin:0 0 8px;display:inline-block}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+video{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:14px;background:#000;margin:0 0 12px}
+#qrCv{width:100%;height:auto;image-rendering:pixelated;border-radius:10px;background:#fff;display:block}
+details{margin:8px 0 16px;font-size:15px;color:var(--mute)}summary{cursor:pointer;padding:6px 0}
+textarea{width:100%;min-height:90px;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:13px/1.3 ui-monospace,Menlo,monospace;margin:8px 0}
+#gErr{position:sticky;top:0}
+</style>
+</head>
+<body>
+<main>
+<p class="status err" id="gErr" hidden></p>
+
+<section id="home">
+  <h1>Photo Transfer</h1>
+  <p>Envoie tes photos de l’iPhone vers l’Android, en qualité d’origine et dans le même ordre. Les deux téléphones doivent être sur le même Wi-Fi. Aucun serveur : tout passe directement de l’un à l’autre.</p>
+  <button id="goSend">Envoyer (depuis l’iPhone)</button>
+  <button id="goRecv" class="alt">Recevoir (sur l’Android)</button>
+</section>
+
+<section id="qrScreen" hidden>
+  <button class="back" data-back>‹ Retour</button>
+  <h2 id="qrTitle"></h2>
+  <p id="qrHelp"></p>
+  <div class="card"><canvas id="qrCv" width="10" height="10"></canvas></div>
+  <p class="status" id="qrStatus">Création du code…</p>
+  <button id="nextBtn" hidden>Scanner le code de l’Android</button>
+  <details><summary>Sans caméra ? Copier le code</summary><button class="alt" id="copyBtn">Copier mon code</button></details>
+</section>
+
+<section id="scanScreen" hidden>
+  <button class="back" data-back>‹ Retour</button>
+  <h2 id="scanTitle"></h2>
+  <video id="vid" playsinline muted></video>
+  <p class="status" id="scanStatus"></p>
+  <details><summary>Sans caméra ? Coller le code</summary>
+    <textarea id="paste" placeholder="Colle ici le code de l’autre téléphone (il commence par PT1:)"></textarea>
+    <button class="alt" id="pasteBtn">Valider</button></details>
+  <canvas id="scanCv" hidden></canvas>
+</section>
+
+<section id="sendScreen" hidden>
+  <button class="back" data-back>‹ Retour</button>
+  <h2>Envoyer</h2>
+  <p class="status ok" id="sStatus">Connecté. Choisis les photos à envoyer.</p>
+  <label class="btn alt" for="pick" id="pickLbl">Choisir des photos</label>
+  <input id="pick" type="file" accept="image/*,.heic,.heif" multiple hidden>
+  <div class="card" id="sList" hidden>
+    <p style="margin:0 0 8px"><span id="sCount"></span> — l’ordre ci-dessous sera celui de la réception. Tu peux encore ajouter des photos avec « Choisir des photos ».</p>
+    <button class="alt" id="sortDate" style="padding:10px;font-size:15px">Trier par date de prise de vue</button>
+    <button class="alt" id="clearBtn" style="padding:10px;font-size:15px">Vider la sélection</button>
+    <ol id="sOl"></ol>
+  </div>
+  <div class="bar" id="sBarWrap" hidden><i id="sBar"></i></div>
+  <button id="sendBtn" disabled>Envoyer</button>
+
+  <div class="card" id="siCard" hidden>
+    <p style="margin:0 0 8px">Fichiers reçus depuis l’Android :</p>
+    <div class="bar" id="siBarWrap" hidden><i id="siBar"></i></div>
+    <ol id="siOl"></ol>
+  </div>
+  <button id="siSaveBtn" hidden disabled>Enregistrer les nouveaux fichiers reçus</button>
+  <p id="siSaveHelp" hidden style="font-size:15px"></p>
+</section>
+
+<section id="recvScreen" hidden>
+  <button class="back" data-back>‹ Retour</button>
+  <h2>Recevoir</h2>
+  <p class="status ok" id="rStatus">Connecté. En attente des photos…</p>
+  <div class="bar" id="rBarWrap" hidden><i id="rBar"></i></div>
+  <div class="card" id="rList" hidden><ol id="rOl"></ol></div>
+  <button id="saveBtn" hidden disabled>Tout enregistrer</button>
+  <p id="saveHelp" hidden style="font-size:15px"></p>
+</section>
+</main>
+
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/jsQR.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const show = id => document.querySelectorAll('section').forEach(s => s.hidden = s.id !== id);
+const MAXBUF = 4 * 1024 * 1024, CH = 16384, PREFIX = 'PT1:';
+const setStatus = (el, txt, cls = '') => { el.textContent = txt; el.className = 'status ' + cls; };
+const fail = msg => { const e = $('#gErr'); e.textContent = msg; e.hidden = !msg; };
+const mb = n => (n / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+let pc, dc, cam, wake, scanResolve = null, scanning = false, files = [], sentTotal = 0, lastCount = 0;
+
+const keepAwake = async () => { try { wake = await navigator.wakeLock.request('screen'); } catch {} };
+const stopCam = () => { scanning = false; if (cam) cam.getTracks().forEach(t => t.stop()); cam = null; };
+function reset() { stopCam(); scanResolve = null; try { pc && pc.close(); wake && wake.release(); } catch {} pc = dc = null; fail(''); }
+document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { reset(); show('home'); });
+
+/* ---------- Codes : SDP compressé -> texte -> QR ---------- */
+const b64u = u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+const keep = l => { if (!l.startsWith('a=candidate:')) return true; const p = l.split(' '); return p[2].toLowerCase() === 'udp' && !p[4].includes(':'); };
+async function pack(sdp) {
+  const small = sdp.split('\r\n').filter(keep).join('\r\n');
+  const buf = new Uint8Array(await new Response(new Blob([small]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+  return PREFIX + b64u(buf);
+}
+async function unpack(code) {
+  if (!code.startsWith(PREFIX)) throw new Error('format');
+  return new Response(new Blob([unb64u(code.slice(PREFIX.length))]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+}
+function drawQR(text) {
+  const qr = qrcode(0, 'L'); qr.addData(text, 'Byte'); qr.make();
+  const n = qr.getModuleCount(), S = 8, Q = 4, W = (n + 2 * Q) * S, cv = $('#qrCv');
+  cv.width = cv.height = W;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, W); g.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect((c + Q) * S, (r + Q) * S, S, S);
+}
+const gathered = p => new Promise(r => {
+  if (p.iceGatheringState === 'complete') return r();
+  const t = setTimeout(r, 3000);
+  p.addEventListener('icegatheringstatechange', () => { if (p.iceGatheringState === 'complete') { clearTimeout(t); r(); } });
+});
+function newPC() {
+  // Pas de serveur STUN : réseau local uniquement, ce qui garde le code court.
+  pc = new RTCPeerConnection({ iceServers: [] });
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') fail('Connexion impossible. Vérifie que les deux téléphones sont sur le même Wi-Fi et que ce Wi-Fi n’isole pas les appareils (réseau invité).'); };
+  return pc;
+}
+// Demander la caméra avant de créer la connexion : le navigateur expose alors les vrais adresses locales.
+async function getCam() { try { cam = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } } }); } catch { cam = null; } }
+let myCode = '';
+$('#copyBtn').onclick = async () => { try { await navigator.clipboard.writeText(myCode); setStatus($('#qrStatus'), 'Code copié.', 'ok'); } catch { setStatus($('#qrStatus'), 'Copie impossible.', 'err'); } };
+
+/* ---------- Scanner ---------- */
+function scan(title) {
+  show('scanScreen'); $('#scanTitle').textContent = title; $('#paste').value = '';
+  return new Promise(res => { scanResolve = res; startScan(); });
+}
+async function startScan() {
+  if (!cam) { setStatus($('#scanStatus'), 'Caméra indisponible : utilise la saisie manuelle ci-dessous.', 'err'); return; }
+  const v = $('#vid'); v.srcObject = cam; await v.play().catch(() => {});
+  setStatus($('#scanStatus'), 'Cadre le code QR dans l’image.'); scanning = true; tick();
+}
+function tick() {
+  if (!scanning) return;
+  const v = $('#vid');
+  if (v.readyState >= 2 && v.videoWidth) {
+    const cv = $('#scanCv'), sc = Math.min(1, 1280 / v.videoWidth);
+    cv.width = v.videoWidth * sc; cv.height = v.videoHeight * sc;
+    const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(v, 0, 0, cv.width, cv.height);
+    const im = g.getImageData(0, 0, cv.width, cv.height);
+    const r = jsQR(im.data, im.width, im.height, { inversionAttempts: 'dontInvert' });
+    if (r && r.data.startsWith(PREFIX)) return finishScan(r.data);
+  }
+  setTimeout(tick, 120);
+}
+function finishScan(code) { scanning = false; const r = scanResolve; scanResolve = null; r && r(code); }
+$('#pasteBtn').onclick = () => { const t = $('#paste').value.trim(); if (t.startsWith(PREFIX)) finishScan(t); else setStatus($('#scanStatus'), 'Ce texte n’est pas un code Photo Transfer.', 'err'); };
+
+/* ---------- Appairage ---------- */
+$('#goSend').onclick = async () => {
+  reset(); await getCam();
+  show('qrScreen'); $('#qrTitle').textContent = 'Envoyer — étape 1 sur 2';
+  $('#qrHelp').textContent = 'Sur l’Android, touche « Recevoir », puis scanne ce code. Monte la luminosité de l’écran.';
+  $('#nextBtn').hidden = true; setStatus($('#qrStatus'), 'Création du code…');
+  try {
+    newPC(); dc = pc.createDataChannel('photos'); setupSender(dc);
+    await pc.setLocalDescription(await pc.createOffer()); await gathered(pc);
+    myCode = await pack(pc.localDescription.sdp); drawQR(myCode);
+    setStatus($('#qrStatus'), 'Prêt : fais scanner ce code par l’Android.', 'ok'); $('#nextBtn').hidden = false;
+  } catch (e) { console.error(e); fail('Impossible de créer le code.'); }
+};
+$('#nextBtn').onclick = async () => {
+  const code = await scan('Scanne le code affiché sur l’Android');
+  try {
+    await pc.setRemoteDescription({ type: 'answer', sdp: await unpack(code) });
+    show('qrScreen'); $('#nextBtn').hidden = true; $('#qrTitle').textContent = 'Connexion…';
+    $('#qrHelp').textContent = ''; setStatus($('#qrStatus'), 'Connexion directe en cours…');
+  } catch (e) { console.error(e); show('qrScreen'); fail('Code illisible. Recommence le scan.'); }
+};
+$('#goRecv').onclick = async () => {
+  reset(); await getCam();
+  const code = await scan('Scanne le code affiché sur l’iPhone');
+  try {
+    newPC(); pc.ondatachannel = e => setupRecv(e.channel);
+    await pc.setRemoteDescription({ type: 'offer', sdp: await unpack(code) });
+    await pc.setLocalDescription(await pc.createAnswer()); await gathered(pc);
+    myCode = await pack(pc.localDescription.sdp); drawQR(myCode);
+    show('qrScreen'); $('#nextBtn').hidden = true; $('#qrTitle').textContent = 'Recevoir — étape 2 sur 2';
+    $('#qrHelp').textContent = 'Fais scanner ce code par l’iPhone (bouton « Scanner le code de l’Android »).';
+    setStatus($('#qrStatus'), 'En attente de l’iPhone…');
+  } catch (e) { console.error(e); show('home'); fail('Code illisible. Recommence depuis le début.'); }
+};
+
+/* ---------- Envoi (iPhone) ---------- */
+$('#pick').onchange = e => { files = files.concat([...e.target.files]); e.target.value = ''; renderSend(); };
+$('#clearBtn').onclick = () => { files = []; renderSend(); };
+$('#sortDate').onclick = () => { files.sort((a, b) => a.lastModified - b.lastModified); renderSend(); };
+function renderSend() {
+  $('#sList').hidden = !files.length;
+  $('#sCount').textContent = files.length + (files.length > 1 ? ' photos' : ' photo') + ' · ' + mb(files.reduce((a, f) => a + f.size, 0));
+  $('#sOl').innerHTML = files.map((f, i) => `<li><b>${i + 1}</b><span></span><em>${mb(f.size)}</em></li>`).join('');
+  [...$('#sOl').children].forEach((li, i) => li.querySelector('span').textContent = files[i].name);
+  $('#sendBtn').disabled = !(files.length && dc && dc.readyState === 'open');
+}
+const drain = () => new Promise(r => { dc.bufferedAmountLowThreshold = MAXBUF / 4; dc.onbufferedamountlow = () => { dc.onbufferedamountlow = null; r(); }; });
+// Réception générique : utilisée des deux côtés, pour que l'app Android puisse pousser des fichiers
+// vers l'iPhone (envoi automatique) tout comme l'iPhone en pousse vers l'Android.
+function makeReceiver(ids) {
+  const st = { meta: null, cur: null, got: 0, files: [], saved: new Set() };
+  const $$ = s => document.getElementById(ids[s]);
+  return {
+    state: st,
+    onCtl(m) {
+      if (m.t === 'meta') {
+        st.meta = m; st.got = 0;
+        if (ids.bar) { $$('bar').style.width = '0'; $$('barWrap').hidden = false; }
+        if (ids.card) $$('card').hidden = false;
+        if (ids.saveBtn) { $$('saveBtn').hidden = true; } if (ids.saveHelp) $$('saveHelp').hidden = true;
+      } else if (m.t === 'file') {
+        st.cur = { ...m, chunks: [] };
+        const li = document.createElement('li'); li.innerHTML = '<b></b><span></span><em>en cours…</em>';
+        li.children[0].textContent = m.i + 1; li.children[1].textContent = m.name; li.id = ids.ol + m.i;
+        $$('ol').append(li);
+      } else if (m.t === 'end') {
+        const c = st.cur, pad = 4;
+        const f = new File(c.chunks, String(c.i + 1).padStart(pad, '0') + '_' + c.name, { type: c.mime || 'application/octet-stream', lastModified: c.mtime || Date.now() });
+        c.chunks = null; st.files[c.i] = f;
+        const li = document.getElementById(ids.ol + c.i); if (li) { li.classList.add('done'); li.children[2].textContent = mb(f.size) + ' ✓'; }
+      } else if (m.t === 'done') {
+        if (ids.bar) $$('bar').style.width = '100%';
+        if (ids.saveBtn) { $$('saveBtn').hidden = false; $$('saveBtn').disabled = false; }
+        if (ids.saveHelp) { $$('saveHelp').hidden = false; $$('saveHelp').textContent = 'Les fichiers seront enregistrés dans l’ordre d’envoi (leur nom commence par leur numéro).'; }
+        return true; // signale « lot terminé » à l'appelant, pour qu'il envoie l'accusé de réception
+      }
+      return false;
+    },
+    onBin(buf) { if (st.cur) { st.cur.chunks.push(buf); st.got += buf.byteLength; if (ids.bar && st.meta) document.getElementById(ids.bar).style.width = (st.got / st.meta.bytes * 100) + '%'; } }
+  };
+}
+const siRx = makeReceiver({ card: 'siCard', bar: 'siBar', barWrap: 'siBarWrap', ol: 'siOl', saveBtn: 'siSaveBtn', saveHelp: 'siSaveHelp' });
+function setupSender(ch) {
+  ch.binaryType = 'arraybuffer';
+  ch.onopen = () => { stopCam(); show('sendScreen'); setStatus($('#sStatus'), 'Connecté. Choisis les photos à envoyer.', 'ok'); renderSend(); };
+  ch.onmessage = e => {
+    if (typeof e.data !== 'string') return siRx.onBin(e.data);
+    const m = JSON.parse(e.data);
+    if (m.t === 'ack') { sentTotal += lastCount; files = []; renderSend(); $('#sBar').style.width = '100%'; setStatus($('#sStatus'), `${lastCount} ${lastCount > 1 ? 'photos sont arrivées' : 'photo est arrivée'} (${sentTotal} au total). Tu peux en choisir d’autres.`, 'ok'); return; }
+    if (['meta', 'file', 'end', 'done'].includes(m.t)) { if (siRx.onCtl(m)) ch.send(JSON.stringify({ t: 'ack' })); }
+  };
+}
+$('#sendBtn').onclick = async () => {
+  const total = files.reduce((a, f) => a + f.size, 0); let sent = 0; lastCount = files.length;
+  $('#sendBtn').disabled = true; $('#sBarWrap').hidden = false; $('#sBar').style.width = '0'; await keepAwake();
+  dc.send(JSON.stringify({ t: 'meta', count: files.length, bytes: total, start: sentTotal }));
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    setStatus($('#sStatus'), `Envoi de la photo ${i + 1} sur ${files.length}…`);
+    dc.send(JSON.stringify({ t: 'file', i: sentTotal + i, name: f.name, mime: f.type, mtime: f.lastModified }));
+    for (let o = 0; o < f.size; o += CH) {
+      if (dc.bufferedAmount > MAXBUF) await drain();
+      dc.send(await f.slice(o, o + CH).arrayBuffer());
+      sent += Math.min(CH, f.size - o); $('#sBar').style.width = (sent / total * 100) + '%';
+    }
+    dc.send(JSON.stringify({ t: 'end', i: sentTotal + i }));
+  }
+  dc.send(JSON.stringify({ t: 'done' }));
+  setStatus($('#sStatus'), 'Envoi terminé, vérification…');
+};
+
+/* ---------- Réception (Android) ---------- */
+let rx = { meta: null, cur: null, got: 0, files: [], saved: new Set() };
+function setupRecv(ch) {
+  dc = ch; dc.binaryType = 'arraybuffer'; rx = { meta: null, cur: null, got: 0, files: [], saved: new Set() };
+  dc.onopen = () => { stopCam(); show('recvScreen'); keepAwake(); };
+  dc.onmessage = e => {
+    if (typeof e.data !== 'string') { rx.cur.chunks.push(e.data); rx.got += e.data.byteLength; $('#rBar').style.width = (rx.got / rx.meta.bytes * 100) + '%'; return; }
+    const m = JSON.parse(e.data);
+    if (m.t === 'meta') { rx.meta = m; rx.got = 0; $('#rBar').style.width = '0'; $('#rBarWrap').hidden = false; $('#rList').hidden = false; $('#saveBtn').hidden = true; $('#saveHelp').hidden = true; }
+    else if (m.t === 'file') {
+      rx.cur = { ...m, chunks: [] };
+      const li = document.createElement('li'); li.innerHTML = '<b></b><span></span><em>en cours…</em>';
+      li.children[0].textContent = m.i + 1; li.children[1].textContent = m.name; li.id = 'r' + m.i; $('#rOl').append(li);
+      setStatus($('#rStatus'), `Réception de la photo ${m.i - rx.meta.start + 1} sur ${rx.meta.count}…`);
+    } else if (m.t === 'end') {
+      const c = rx.cur, pad = 4;
+      const f = new File(c.chunks, String(c.i + 1).padStart(pad, '0') + '_' + c.name, { type: c.mime || 'image/jpeg', lastModified: c.mtime || Date.now() });
+      c.chunks = null; rx.files[c.i] = f;
+      const li = $('#r' + c.i); li.classList.add('done'); li.children[2].textContent = mb(f.size) + ' ✓';
+    } else if (m.t === 'done') {
+      dc.send(JSON.stringify({ t: 'ack' })); $('#rBar').style.width = '100%';
+      setStatus($('#rStatus'), `${rx.meta.count} ${rx.meta.count > 1 ? 'photos reçues' : 'photo reçue'}, qualité d’origine (${rx.files.filter(Boolean).length} au total).`, 'ok');
+      $('#saveBtn').hidden = false; $('#saveBtn').disabled = false; $('#saveBtn').textContent = 'Enregistrer les nouvelles photos'; $('#saveHelp').hidden = false;
+      $('#saveHelp').textContent = 'Les photos seront enregistrées l’une après l’autre, dans l’ordre d’envoi (leur nom commence par leur numéro).';
+    }
+  };
+}
+$('#saveBtn').onclick = async () => {
+  for (let i = 0; i < rx.files.length; i++) {
+    const f = rx.files[i]; if (!f || rx.saved.has(i)) continue;
+    rx.saved.add(i);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name;
+    document.body.append(a); a.click(); a.remove(); await new Promise(r => setTimeout(r, 700));
+  }
+};
+
+$('#siSaveBtn').onclick = async () => {
+  const st = siRx.state;
+  for (let i = 0; i < st.files.length; i++) {
+    const f = st.files[i]; if (!f || st.saved.has(i)) continue;
+    st.saved.add(i);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name;
+    document.body.append(a); a.click(); a.remove(); await new Promise(r => setTimeout(r, 700));
+  }
+};
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
