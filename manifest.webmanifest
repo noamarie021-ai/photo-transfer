@@ -1,0 +1,14 @@
+{
+  "name": "Photo Transfer",
+  "short_name": "Photo Transfer",
+  "description": "Transfert de photos iPhone vers Android en qualité d'origine",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EEF2F6",
+  "theme_color": "#2D5BFF",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
